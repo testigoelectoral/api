@@ -1,0 +1,55 @@
+name: Stages Callback
+on:
+  push:
+    branches:
+      - dev
+      - stage
+jobs:
+  callback:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: "Get Merged SHA"
+        id: mergedsha
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get Merged SHA
+          export SHA=$(gh api --jq '.parents[1].sha' /repos/testigoelectoral/api/commits/${{ github.event.after }})
+          echo "SHA: ${SHA}"
+          echo "::set-output name=sha::${SHA}"
+
+      - name: "Get Branch name"
+        id: branchname
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get Branch name
+          export BRANCH=$(gh api --jq '.[]|select(.commit.sha=="${{ steps.mergedsha.outputs.sha }}")|.name' /repos/testigoelectoral/api/branches)
+          echo "BRANCH: ${BRANCH}"
+          echo "::set-output name=branch::${BRANCH}"
+
+      - name: "Get Actions to re-run"
+        shell: bash
+        id: actions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get Actions to re-run
+          export QUERY='.workflow_runs[]|select(.head_sha=="${{ steps.mergedsha.outputs.sha }}")|.id'
+          echo "QUERY: ${QUERY}"
+          export ACTIONS=$(gh api --jq ${QUERY} --method GET -f status=failure -f event=pull_request -f branch=${{ steps.branchname.outputs.branch }} /repos/testigoelectoral/api/actions/runs)
+          echo "ACTIONS: ${ACTIONS}"
+          echo "::set-output name=actions::${ACTIONS}"
+
+      - name: "Rerun actions"
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Rerun actions
+          export ACTIONS=${{ steps.actions.outputs.actions }}
+          echo "ACTIONS: ${ACTIONS}"
+          for actionId in ${ACTIONS}; do gh run rerun ${actionId} -R "testigoelectoral/api" || true; done
