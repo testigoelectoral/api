@@ -1,10 +1,10 @@
-name: Golanci linter
+name: Golang
 on:
   pull_request:
     branches: [ main ]
 
 jobs:
-  directories:
+  functions:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.dirs.outputs.matrix }}
@@ -27,15 +27,15 @@ jobs:
               DIRS='[]'
           fi
 
-          MATRIX_JSON='{"dir":'${DIRS}'}'
+          MATRIX_JSON='{"function":'${DIRS}'}'
 
           echo "MATRIX_JSON: ${MATRIX_JSON}"
           echo "::set-output name=matrix::${MATRIX_JSON}"
   linter:
-    needs: [directories]
-    if: ${{ ! contains(needs.directories.outputs.matrix, '"dir":[]') }}
+    needs: [functions]
+    if: ${{ ! contains(needs.functions.outputs.matrix, '"function":[]') }}
     strategy:
-      matrix: ${{fromJson(needs.directories.outputs.matrix)}}
+      matrix: ${{fromJson(needs.functions.outputs.matrix)}}
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
@@ -44,4 +44,21 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
-          working-directory: ${{ matrix.dir }}
+          working-directory: ${{ matrix.function }}
+  test:
+    needs: [functions]
+    if: ${{ ! contains(needs.functions.outputs.matrix, '"function":[]') }}
+    strategy:
+      matrix: ${{fromJson(needs.functions.outputs.matrix)}}
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v2
+      - name: Test
+        working-directory: ${{ matrix.function }}
+        run: |
+          # Running tests
+          go test
