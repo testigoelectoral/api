@@ -17,7 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
-	// TODO: Must be removed this external libray ?
+	// TODO: Must be removed this external libray?
 	"github.com/mitchellh/mapstructure"
 )
 
