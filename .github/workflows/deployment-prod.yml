@@ -70,4 +70,5 @@ jobs:
           destination-dir: "/lambda/${{ matrix.function }}/"
           bucket-root: "/"
           public: false
+          content-type: "text/plain"
           file-path: "${{ matrix.function }}/${{ matrix.function }}.zip.sha256"
