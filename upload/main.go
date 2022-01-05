@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"mime"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -17,9 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 
 	"github.com/google/uuid"
-
-	// TODO: Must be removed this external libray?
-	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -28,16 +24,16 @@ var (
 )
 
 type actualUploader interface {
-	PresigUrl(*s3.PutObjectInput) (string, http.Header, error)
+	PresigUrl(*s3.PutObjectInput) (string, error)
 }
 
 type s3Uploader struct {
 	service s3iface.S3API
 }
 
-func (u *s3Uploader) PresigUrl(input *s3.PutObjectInput) (string, http.Header, error) { //nolint:revive
+func (u *s3Uploader) PresigUrl(input *s3.PutObjectInput) (string, error) { //nolint:revive
 	req, _ := u.service.PutObjectRequest(input)
-	return req.PresignRequest(15 * time.Minute)
+	return req.Presign(15 * time.Minute)
 }
 
 type GPSdata struct {
@@ -54,14 +50,19 @@ type MetadataRequest struct {
 type User struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
-	Hash  string `json:"hash"`
+	Hash  string `json:"custom:hash"`
 }
 
 func getUser(request *events.APIGatewayProxyRequest) (User, error) {
 	input := request.RequestContext.Authorizer["claims"]
 	output := User{}
 
-	err := mapstructure.Decode(input, &output)
+	jsonStr, err := json.Marshal(input)
+	if err != nil {
+		return output, err
+	}
+
+	err = json.Unmarshal(jsonStr, &output)
 
 	return output, err
 }
@@ -88,7 +89,7 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 		return nil, err
 	}
 
-	urlString, headersMap, err := s3Service.PresigUrl(&s3.PutObjectInput{
+	urlString, err := s3Service.PresigUrl(&s3.PutObjectInput{
 		Bucket:       aws.String(uploadBucket),
 		Key:          aws.String(imageID + extensions[0]),
 		ContentType:  aws.String(metaRequest.ContentType),
@@ -103,9 +104,9 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"url":     string(urlString),
-		"headers": headersMap,
-		"id":      string(imageID),
+		"url":  string(urlString),
+		"hash": User.Hash,
+		"id":   string(imageID),
 	})
 
 	uploadHandlerResult := &events.APIGatewayProxyResponse{
