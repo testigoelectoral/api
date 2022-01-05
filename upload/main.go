@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"mime"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -27,16 +28,16 @@ var (
 )
 
 type actualUploader interface {
-	PresigUrl(*s3.PutObjectInput) (string, error)
+	PresigUrl(*s3.PutObjectInput) (string, http.Header, error)
 }
 
 type s3Uploader struct {
 	service s3iface.S3API
 }
 
-func (u *s3Uploader) PresigUrl(input *s3.PutObjectInput) (string, error) { //nolint:revive
+func (u *s3Uploader) PresigUrl(input *s3.PutObjectInput) (string, http.Header, error) { //nolint:revive
 	req, _ := u.service.PutObjectRequest(input)
-	return req.Presign(15 * time.Minute)
+	return req.PresignRequest(15 * time.Minute)
 }
 
 type GPSdata struct {
@@ -87,7 +88,7 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 		return nil, err
 	}
 
-	urlString, err := s3Service.PresigUrl(&s3.PutObjectInput{
+	urlString, headersMap, err := s3Service.PresigUrl(&s3.PutObjectInput{
 		Bucket:       aws.String(uploadBucket),
 		Key:          aws.String(imageID + extensions[0]),
 		ContentType:  aws.String(metaRequest.ContentType),
@@ -102,8 +103,9 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"url": string(urlString),
-		"id":  string(imageID),
+		"url":     string(urlString),
+		"headers": headersMap,
+		"id":      string(imageID),
 	})
 
 	uploadHandlerResult := &events.APIGatewayProxyResponse{
