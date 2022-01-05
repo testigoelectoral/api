@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"testing"
 
@@ -14,21 +15,29 @@ import (
 type mockS3Uploader struct {
 }
 
-func (u *mockS3Uploader) PresigUrl(input *s3.PutObjectInput) (string, error) { //nolint:revive
+func (u *mockS3Uploader) PresigUrl(input *s3.PutObjectInput) (string, http.Header, error) { //nolint:revive
 	fakePath := "https://s3.eu-west-1.amazonaws.com/" + *input.Bucket + "/" + *input.Key + "?"
 	fakeParams := url.Values{}
-	fakeParams.Add("AWSAccessKeyId", "XXXXXXXXXXXXXXX")
-	fakeParams.Add("Cache-Control", *input.CacheControl)
-	fakeParams.Add("Content-Type", *input.ContentType)
-	fakeParams.Add("Signature", "YYYYYYYYYYYYYYY")
-	fakeParams.Add("x-amz-meta-contenttype", *input.Metadata["contentType"])
-	fakeParams.Add("x-amz-meta-userhash", *input.Metadata["userHash"])
-	fakeParams.Add("x-amz-meta-latitude", *input.Metadata["latitude"])
-	fakeParams.Add("x-amz-meta-longitude", *input.Metadata["longitude"])
-	fakeParams.Add("x-amz-meta-accuracy", *input.Metadata["accuracy"])
+	fakeParams.Add("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
+	fakeParams.Add("X-Amz-Credential", "XXXXXXXXXXXXXXX")
+	fakeParams.Add("X-Amz-Security-Token", "ZZZZZZZZZZZZZZZ")
+	fakeParams.Add("X-Amz-Signature", "YYYYYYYYYYYYYYY")
+	fakeParams.Add("X-Amz-Expires", "900")
+	fakeParams.Add("X-Amz-Date", "20220104T215629Z")
+	fakeParams.Add("X-Amz-SignedHeaders", "cache-control;content-type;host;x-amz-meta-accuracy;x-amz-meta-contenttype;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-userhash")
 	fakeURL := fakePath + fakeParams.Encode()
 
-	return fakeURL, nil
+	headers := http.Header{}
+	headers.Add("x-amz-meta-contenttype", *input.Metadata["contentType"])
+	headers.Add("x-amz-meta-userhash", *input.Metadata["userHash"])
+	headers.Add("x-amz-meta-latitude", *input.Metadata["latitude"])
+	headers.Add("x-amz-meta-longitude", *input.Metadata["longitude"])
+	headers.Add("x-amz-meta-accuracy", *input.Metadata["accuracy"])
+	headers.Add("cache-control", *input.CacheControl)
+	headers.Add("content-type", *input.ContentType)
+	headers.Add("host", "s3.eu-west-1.amazonaws.com")
+
+	return fakeURL, headers, nil
 }
 
 func init() {
@@ -62,8 +71,9 @@ func uploadRequest() *events.APIGatewayProxyRequest {
 }
 
 type bodyResult struct {
-	URL string `json:"url"`
-	ID  string `json:"id"`
+	URL     string              `json:"url"`
+	Headers map[string][]string `json:"headers"`
+	ID      string              `json:"id"`
 }
 
 func Test_uploadHandler(t *testing.T) {
@@ -84,13 +94,19 @@ func Test_uploadHandler(t *testing.T) {
 	c.Equal(u.Path, "/my-bucket-test/"+body.ID+".jpe")
 
 	p, _ := url.ParseQuery(u.RawQuery)
-	c.Equal(p["AWSAccessKeyId"][0], "XXXXXXXXXXXXXXX")
-	c.Equal(p["Cache-Control"][0], "max-age=31557600")
-	c.Equal(p["Content-Type"][0], "image/jpeg")
-	c.Equal(p["Signature"][0], "YYYYYYYYYYYYYYY")
-	c.Equal(p["x-amz-meta-userhash"][0], "b2ca42478035dbd6208df19f87914f3499f851279d14f956c75d0aeda2d9e4d7")
-	c.Equal(p["x-amz-meta-contenttype"][0], "image/jpeg")
-	c.Equal(p["x-amz-meta-latitude"][0], "4.595696")
-	c.Equal(p["x-amz-meta-longitude"][0], "-74.078918")
-	c.Equal(p["x-amz-meta-accuracy"][0], "15.391")
+	c.Equal(p["X-Amz-Algorithm"][0], "AWS4-HMAC-SHA256")
+	c.Equal(p["X-Amz-Credential"][0], "XXXXXXXXXXXXXXX")
+	c.Equal(p["X-Amz-Security-Token"][0], "ZZZZZZZZZZZZZZZ")
+	c.Equal(p["X-Amz-Signature"][0], "YYYYYYYYYYYYYYY")
+	c.Equal(p["X-Amz-Expires"][0], "900")
+	c.Equal(p["X-Amz-Date"][0], "20220104T215629Z")
+	c.Equal(p["X-Amz-SignedHeaders"][0], "cache-control;content-type;host;x-amz-meta-accuracy;x-amz-meta-contenttype;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-userhash")
+
+	c.Equal(body.Headers["Cache-Control"][0], "max-age=31557600")
+	c.Equal(body.Headers["Content-Type"][0], "image/jpeg")
+	c.Equal(body.Headers["Host"][0], "s3.eu-west-1.amazonaws.com")
+	c.Equal(body.Headers["X-Amz-Meta-Accuracy"][0], "15.391")
+	c.Equal(body.Headers["X-Amz-Meta-Contenttype"][0], "image/jpeg")
+	c.Equal(body.Headers["X-Amz-Meta-Longitude"][0], "-74.078918")
+	c.Equal(body.Headers["X-Amz-Meta-Userhash"][0], "b2ca42478035dbd6208df19f87914f3499f851279d14f956c75d0aeda2d9e4d7")
 }
