@@ -21,9 +21,9 @@ func (u *mockS3Uploader) PresigUrl(input *s3.PutObjectInput) (string, error) { /
 	fakeParams.Add("X-Amz-Credential", "XXXXXXXXXXXXXXX")
 	fakeParams.Add("X-Amz-Security-Token", "ZZZZZZZZZZZZZZZ")
 	fakeParams.Add("X-Amz-Signature", "YYYYYYYYYYYYYYY")
-	fakeParams.Add("X-Amz-Expires", "900")
+	fakeParams.Add("X-Amz-Expires", "300")
 	fakeParams.Add("X-Amz-Date", "20220104T215629Z")
-	fakeParams.Add("X-Amz-SignedHeaders", "cache-control;content-type;host;x-amz-meta-accuracy;x-amz-meta-contenttype;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-userhash")
+	fakeParams.Add("X-Amz-SignedHeaders", "content-type;content-md5;host;x-amz-meta-accuracy;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-user-hash")
 	fakeURL := fakePath + fakeParams.Encode()
 
 	return fakeURL, nil
@@ -87,9 +87,9 @@ func Test_uploadHandler(t *testing.T) {
 	p, _ := url.ParseQuery(u.RawQuery)
 	c.Equal(p["X-Amz-Algorithm"][0], "AWS4-HMAC-SHA256")
 	c.Equal(p["X-Amz-Credential"][0], "XXXXXXXXXXXXXXX")
-	c.Equal(p["X-Amz-Security-Token"][0], "ZZZZZZZZZZZZZZZ")
-	c.Equal(p["X-Amz-Signature"][0], "YYYYYYYYYYYYYYY")
-	c.Equal(p["X-Amz-Expires"][0], "900")
 	c.Equal(p["X-Amz-Date"][0], "20220104T215629Z")
-	c.Equal(p["X-Amz-SignedHeaders"][0], "cache-control;content-type;host;x-amz-meta-accuracy;x-amz-meta-contenttype;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-userhash")
+	c.Equal(p["X-Amz-Expires"][0], "300")
+	c.Equal(p["X-Amz-Security-Token"][0], "ZZZZZZZZZZZZZZZ")
+	c.Equal(p["X-Amz-SignedHeaders"][0], "content-type;content-md5;host;x-amz-meta-accuracy;x-amz-meta-latitude;x-amz-meta-longitude;x-amz-meta-user-hash")
+	c.Equal(p["X-Amz-Signature"][0], "YYYYYYYYYYYYYYY")
 }
