@@ -43,9 +43,10 @@ type GPSdata struct {
 }
 
 type MetadataRequest struct {
-	ContentType string  `json:"Content-Type"`
-	ContentMD5  string  `json:"Content-MD5"`
-	GPS         GPSdata `json:"GPS"`
+	ContentType   string  `json:"Content-Type"`
+	ContentMD5    string  `json:"Content-MD5"`
+	ContentLength int64   `json:"Content-Length"`
+	GPS           GPSdata `json:"GPS"`
 }
 
 type User struct {
@@ -91,10 +92,11 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 	}
 
 	urlString, err := s3Service.PresigUrl(&s3.PutObjectInput{
-		Bucket:      aws.String(uploadBucket),
-		Key:         aws.String(imageID + extensions[0]),
-		ContentType: aws.String(metaRequest.ContentType),
-		ContentMD5:  aws.String(metaRequest.ContentMD5),
+		Bucket:        aws.String(uploadBucket),
+		Key:           aws.String(imageID + extensions[0]),
+		ContentType:   aws.String(metaRequest.ContentType),
+		ContentMD5:    aws.String(metaRequest.ContentMD5),
+		ContentLength: aws.Int64(metaRequest.ContentLength),
 		Metadata: aws.StringMap(map[string]string{
 			"Accuracy":  strconv.FormatFloat(metaRequest.GPS.Accuracy, 'G', -1, 64),
 			"Latitude":  strconv.FormatFloat(metaRequest.GPS.Latitude, 'G', -1, 64),
@@ -104,9 +106,8 @@ func uploadHandler(request *events.APIGatewayProxyRequest) (*events.APIGatewayPr
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"url":  string(urlString),
-		"hash": User.Hash,
-		"id":   string(imageID),
+		"url": string(urlString),
+		"id":  string(imageID),
 	})
 
 	uploadHandlerResult := &events.APIGatewayProxyResponse{
